@@ -4,6 +4,8 @@ src_managed/
 project/boot/
 
 .idea
+.metals
+.bloop
 *.iml
 
 *.swp
