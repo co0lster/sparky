@@ -1,6 +1,7 @@
 package io.datapotion.sparky
 
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
 
 trait SparkSessionWrapper extends Serializable {
 
@@ -10,77 +11,54 @@ trait SparkSessionWrapper extends Serializable {
 
 }
 
-class Main extends SparkSessionWrapper {
+object Main extends SparkSessionWrapper {
 
-import spark.implicits._
+  def main(args: Array[String]): Unit = {
+    val emp = Seq((1, "Smith", -1, "2018", "10", "M", 3000),
+      (2, "Rose", 1, "2010", "20", "M", 4000),
+      (3, "Williams", 1, "2010", "10", "M", 1000),
+      (4, "Jones", 2, "2005", "10", "F", 2000),
+      (5, "Brown", 2, "2010", "40", "", -1),
+      (6, "Brown", 2, "2010", "50", "", -1)
+    )
+    val empColumns = Seq("emp_id", "name", "superior_emp_id", "year_joined",
+      "emp_dept_id", "gender", "salary")
 
-val myDF = Seq(1,2,3).toDF
+    import spark.sqlContext.implicits._
+    val empDF = emp.toDF(empColumns: _*)
+    empDF.show(false)
 
-val plan = myDF.queryExecution.optimizedPlan
+    val dept = Seq(("Finance", 10),
+      ("Marketing", 20),
+      ("Sales", 30),
+      ("IT", 40)
+    )
 
-val children = plan.children
+    val deptColumns = Seq("dept_name", "dept_id")
+    val deptDF = dept.toDF(deptColumns: _*)
 
-val innerChildren = plan.innerChildren
+    val joined = empDF.join(deptDF, empDF("emp_dept_id") === deptDF("dept_id"), "inner")
+    val optPlan = joined.queryExecution.optimizedPlan
+    val anPlan = joined.queryExecution.analyzed
 
-val verboseString = plan.verboseString(9999)
-
-val verboseStringWithSuffix = plan.verboseStringWithSuffix(9999)
-
-val verboseStringWithOperatorId = plan.verboseStringWithOperatorId()
-
-val simpleString = plan.simpleString(9999)
-
-val simipleStringWithNodeId = plan.simpleStringWithNodeId()
+    visualize(anPlan)
+    println("============================")
+    visualize(optPlan)
 
 
-def generateTreeString(
-      depth: Int,
-      lastChildren: Seq[Boolean],
-      append: String => Unit,
-      verbose: Boolean,
-      prefix: String = "",
-      addSuffix: Boolean = false,
-      maxFields: Int,
-      printNodeId: Boolean,
-      indent: Int = 0): Unit = {
-    append("   " * indent)
-    if (depth > 0) {
-      lastChildren.init.foreach { isLast =>
-        append(if (isLast) "   " else ":  ")
-      }
-      append(if (lastChildren.last) "+- " else ":- ")
-    }
+  }
 
-    val str = if (verbose) {
-      if (addSuffix) verboseStringWithSuffix(maxFields) else verboseString(maxFields)
-    } else {
-      if (printNodeId) {
-        plan.simpleStringWithNodeId()
-      } else {
-        simpleString(maxFields)
-      }
-    }
-    append(prefix)
-    append(str)
-    append("\n")
+  // TODO create recursive method that creates mermaid graph
+  /*
+ A[Join]
+ A --> B[Project]
+ B --> C[Local Relation]
+ A --> D[Project]
+ D --> E[Local Relation]
+   */
 
-    if (innerChildren.nonEmpty) {
-      innerChildren.init.foreach(_.generateTreeString(
-        depth + 2, lastChildren :+ children.isEmpty :+ false, append, verbose,
-        addSuffix = addSuffix, maxFields = maxFields, printNodeId = printNodeId, indent = indent))
-      innerChildren.last.generateTreeString(
-        depth + 2, lastChildren :+ children.isEmpty :+ true, append, verbose,
-        addSuffix = addSuffix, maxFields = maxFields, printNodeId = printNodeId, indent = indent)
-    }
-
-    if (children.nonEmpty) {
-      children.init.foreach(_.generateTreeString(
-        depth + 1, lastChildren :+ false, append, verbose, prefix, addSuffix,
-        maxFields, printNodeId = printNodeId, indent = indent)
-      )
-      children.last.generateTreeString(
-        depth + 1, lastChildren :+ true, append, verbose, prefix,
-        addSuffix, maxFields, printNodeId = printNodeId, indent = indent)
-    }
+  def visualize(plan: LogicalPlan): Unit = {
+    println(plan.verboseStringWithSuffix(25))
+    plan.children.foreach(child => println(child.verboseStringWithSuffix(25)))
   }
 }
