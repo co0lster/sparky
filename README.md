@@ -1,4 +1,4 @@
-# sparky
+# ✨sparky✨
 
 *add project short description*
 
